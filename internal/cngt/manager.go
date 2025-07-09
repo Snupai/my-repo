@@ -81,14 +81,32 @@ func RunScript(scriptName string, args []string) error {
 		return fmt.Errorf("script %s not found", scriptName)
 	}
 
+	// Find the best Python command
+	pythonCmd := findPythonCommand()
+	if pythonCmd == "" {
+		return fmt.Errorf("Python is not installed or not found in PATH")
+	}
+	
 	cmdArgs := append([]string{scriptPath}, args...)
-	cmd := exec.Command("python", cmdArgs...)
+	cmd := exec.Command(pythonCmd, cmdArgs...)
 	cmd.Dir = cfg.CNGTPath
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
 	return cmd.Run()
+}
+
+func findPythonCommand() string {
+	pythonCommands := []string{"python", "python3", "py"}
+	
+	for _, pythonCmd := range pythonCommands {
+		cmd := exec.Command(pythonCmd, "--version")
+		if cmd.Run() == nil {
+			return pythonCmd
+		}
+	}
+	return ""
 }
 
 func GetStatus() Status {
@@ -124,15 +142,16 @@ func GetStatus() Status {
 		status.RepoStatus = "Not installed"
 	}
 
-	if cmd := exec.Command("python", "--version"); cmd.Run() == nil {
-		out, err := cmd.Output()
-		if err != nil {
-			status.PythonStatus = "Error getting version"
-		} else {
+	// Try different Python command variations
+	pythonCommands := []string{"python", "python3", "py"}
+	status.PythonStatus = "Not found"
+	
+	for _, pythonCmd := range pythonCommands {
+		cmd := exec.Command(pythonCmd, "--version")
+		if out, err := cmd.Output(); err == nil {
 			status.PythonStatus = strings.TrimSpace(string(out))
+			break
 		}
-	} else {
-		status.PythonStatus = "Not found"
 	}
 
 	if deps.AreInstalled() {

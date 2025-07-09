@@ -78,6 +78,11 @@ var updateCmd = &cobra.Command{
 	Short: "Update the CNGT repository to the latest version",
 	Long:  "Pull the latest changes from the custom-nothing-glyph-tools repository",
 	Run: func(cmd *cobra.Command, args []string) {
+		if err := ensureSetup(); err != nil {
+			fmt.Fprintf(os.Stderr, "Setup error: %v\n", err)
+			os.Exit(1)
+		}
+		
 		if err := cngt.Update(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error updating CNGT: %v\n", err)
 			os.Exit(1)
@@ -108,6 +113,26 @@ var statusCmd = &cobra.Command{
 		fmt.Printf("CNGT Repository: %s\n", status.RepoStatus)
 		fmt.Printf("Python: %s\n", status.PythonStatus)
 		fmt.Printf("Dependencies: %s\n", status.DepsStatus)
+		
+		// If nothing is installed, offer to set up
+		if status.RepoStatus == "Not installed" {
+			fmt.Println()
+			fmt.Println("💡 Tip: Run 'cngt-cli setup' to install CNGT and dependencies interactively")
+		}
+	},
+}
+
+var setupCmd = &cobra.Command{
+	Use:   "setup",
+	Short: "Interactive setup of CNGT repository and dependencies",
+	Long:  "Guides you through the installation of the CNGT repository and Python dependencies",
+	Run: func(cmd *cobra.Command, args []string) {
+		if err := interactiveSetup(); err != nil {
+			fmt.Fprintf(os.Stderr, "Setup failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("✅ Setup completed successfully!")
+		fmt.Println("You can now use cngt-cli commands like 'cngt-cli migrate --help'")
 	},
 }
 
@@ -126,20 +151,74 @@ func ensureSetup() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	needsSetup := false
 	if !cngt.IsInstalled(cfg.CNGTPath) {
-		fmt.Println("CNGT repository not found. Installing...")
-		if err := cngt.Install(cfg.CNGTPath); err != nil {
-			return fmt.Errorf("failed to install CNGT: %w", err)
-		}
-		fmt.Println("CNGT repository installed successfully")
+		needsSetup = true
+	}
+	if !deps.AreInstalled() {
+		needsSetup = true
 	}
 
+	if needsSetup {
+		fmt.Println("📋 CNGT CLI - First Time Setup")
+		fmt.Println("This tool requires the CNGT repository and Python dependencies.")
+		fmt.Println()
+		fmt.Print("Would you like to install everything now? (Y/n): ")
+		
+		var response string
+		fmt.Scanln(&response)
+		
+		if response == "n" || response == "N" || response == "no" || response == "No" {
+			fmt.Println("Setup cancelled. You can run 'cngt-cli setup' anytime to install.")
+			return fmt.Errorf("setup required but cancelled by user")
+		}
+		
+		return interactiveSetup()
+	}
+
+	return nil
+}
+
+func interactiveSetup() error {
+	fmt.Println("🚀 Starting CNGT CLI Setup...")
+	fmt.Println()
+
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Install CNGT repository
+	if !cngt.IsInstalled(cfg.CNGTPath) {
+		fmt.Println("📦 Installing CNGT repository...")
+		fmt.Println("   Repository: https://github.com/SebiAi/custom-nothing-glyph-tools")
+		fmt.Printf("   Location: %s\n", cfg.CNGTPath)
+		fmt.Println()
+		
+		if err := cngt.Install(cfg.CNGTPath); err != nil {
+			return fmt.Errorf("failed to install CNGT repository: %w", err)
+		}
+		fmt.Println("✅ CNGT repository installed successfully")
+		fmt.Println()
+	} else {
+		fmt.Println("✅ CNGT repository already installed")
+		fmt.Println()
+	}
+
+	// Check and install Python dependencies
 	if !deps.AreInstalled() {
-		fmt.Println("Python dependencies not found. Installing...")
-		if err := deps.Install(); err != nil {
+		fmt.Println("🐍 Installing Python dependencies...")
+		fmt.Println("   Required packages: termcolor, mido, colorama>=0.4.6, cryptography>=42.0.5")
+		fmt.Println()
+		
+		if err := deps.CheckInteractive(); err != nil {
 			return fmt.Errorf("failed to install dependencies: %w", err)
 		}
-		fmt.Println("Dependencies installed successfully")
+		fmt.Println("✅ Python dependencies installed successfully")
+		fmt.Println()
+	} else {
+		fmt.Println("✅ Python dependencies already installed")
+		fmt.Println()
 	}
 
 	return nil
@@ -169,6 +248,7 @@ func init() {
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(selfUpdateCmd)
 	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(setupCmd)
 }
 
 func main() {
