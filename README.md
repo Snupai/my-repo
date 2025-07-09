@@ -48,7 +48,7 @@ cngt-cli migrate --help
 - `cngt-cli modder [args...]` - Run GlyphModder.py  
 - `cngt-cli translator [args...]` - Run GlyphTranslator.py
 - `cngt-cli update` - Update CNGT repository
-- `cngt-cli self-update` - Update the CLI tool itself
+- `cngt-cli upgrade` - Update the CLI tool itself
 - `cngt-cli status` - Show installation status
 - `cngt-cli --help` - Show help information
 
@@ -66,7 +66,7 @@ cngt-cli translator --format json input.glyph
 
 # Update everything
 cngt-cli update
-cngt-cli self-update
+cngt-cli upgrade
 ```
 
 ## Requirements

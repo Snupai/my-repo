@@ -27,12 +27,17 @@ type Release struct {
 func CheckForUpdates() (*Release, bool, error) {
 	resp, err := http.Get(githubAPIURL)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to check for updates: %w", err)
+		return nil, false, fmt.Errorf("failed to check for updates (network error): %w", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, false, fmt.Errorf("no releases found for this repository yet")
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, false, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var release Release
@@ -146,27 +151,35 @@ func replaceBinary(newBinary string) error {
 }
 
 func SelfUpdate() error {
-	fmt.Println("Checking for CLI updates...")
+	fmt.Println("🔍 Checking for CLI updates...")
 	
 	release, hasUpdate, err := CheckForUpdates()
 	if err != nil {
+		// Handle specific error cases more gracefully
+		if strings.Contains(err.Error(), "no releases found") {
+			fmt.Println("ℹ️  No releases are available yet for automatic updates.")
+			fmt.Println("   You can check for updates manually at: https://github.com/snupai/cngt-cli/releases")
+			return nil
+		}
 		return fmt.Errorf("failed to check for updates: %w", err)
 	}
 
 	if !hasUpdate {
-		fmt.Println("CLI is up to date")
+		fmt.Println("✅ CLI is up to date")
 		return nil
 	}
 
-	fmt.Printf("New version available: %s\n", release.TagName)
+	fmt.Printf("🆕 New version available: %s\n", release.TagName)
 	fmt.Print("Would you like to update? (y/N): ")
 	
 	var response string
 	fmt.Scanln(&response)
 	
 	if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
+		fmt.Println("⬇️  Downloading and installing update...")
 		return Update()
 	}
 
+	fmt.Println("Update cancelled. You can update later with 'cngt-cli upgrade'")
 	return nil
 }

@@ -4,7 +4,8 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(go build:*)",
-      "Bash(./cngt-cli-test:*)"
+      "Bash(./cngt-cli-test:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

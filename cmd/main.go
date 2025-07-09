@@ -91,8 +91,8 @@ var updateCmd = &cobra.Command{
 	},
 }
 
-var selfUpdateCmd = &cobra.Command{
-	Use:   "self-update",
+var upgradeCmd = &cobra.Command{
+	Use:   "upgrade",
 	Short: "Update the cngt-cli tool itself",
 	Long:  "Check for and install updates to the cngt-cli tool",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -141,7 +141,7 @@ func ensureSetup() error {
 	go func() {
 		if shouldCheckForUpdates() {
 			if release, hasUpdate, err := updater.CheckForUpdates(); err == nil && hasUpdate {
-				fmt.Printf("\n🔄 New version %s available! Run 'cngt-cli self-update' to upgrade.\n\n", release.TagName)
+				fmt.Printf("\n🔄 New version %s available! Run 'cngt-cli upgrade' to update.\n\n", release.TagName)
 			}
 		}
 	}()
@@ -246,7 +246,7 @@ func init() {
 	rootCmd.AddCommand(modderCmd)
 	rootCmd.AddCommand(translatorCmd)
 	rootCmd.AddCommand(updateCmd)
-	rootCmd.AddCommand(selfUpdateCmd)
+	rootCmd.AddCommand(upgradeCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(setupCmd)
 }
