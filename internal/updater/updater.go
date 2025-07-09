@@ -6,10 +6,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 	
 	"github.com/snupai/cngt-cli/internal/version"
 )
