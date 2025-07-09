@@ -81,20 +81,39 @@ func RunScript(scriptName string, args []string) error {
 		return fmt.Errorf("script %s not found", scriptName)
 	}
 
-	// Find the best Python command
-	pythonCmd := findPythonCommand()
-	if pythonCmd == "" {
-		return fmt.Errorf("Python is not installed or not found in PATH")
+	// Check if uv is available and there's a pyproject.toml
+	var cmd *exec.Cmd
+	if isUvAvailable() && hasUvProject(cfg.CNGTPath) {
+		// Use uv run to execute the script with the proper environment
+		cmdArgs := append([]string{"run", "python", scriptPath}, args...)
+		cmd = exec.Command("uv", cmdArgs...)
+	} else {
+		// Find the best Python command
+		pythonCmd := findPythonCommand()
+		if pythonCmd == "" {
+			return fmt.Errorf("Python is not installed or not found in PATH")
+		}
+		
+		cmdArgs := append([]string{scriptPath}, args...)
+		cmd = exec.Command(pythonCmd, cmdArgs...)
 	}
 	
-	cmdArgs := append([]string{scriptPath}, args...)
-	cmd := exec.Command(pythonCmd, cmdArgs...)
 	cmd.Dir = cfg.CNGTPath
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
 	return cmd.Run()
+}
+
+func isUvAvailable() bool {
+	cmd := exec.Command("uv", "--version")
+	return cmd.Run() == nil
+}
+
+func hasUvProject(path string) bool {
+	_, err := os.Stat(filepath.Join(path, "pyproject.toml"))
+	return err == nil
 }
 
 func findPythonCommand() string {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/snupai/cngt-cli/internal/config"
@@ -19,12 +20,42 @@ var requiredPackages = []string{
 }
 
 func AreInstalled() bool {
+	cfg, err := config.Load()
+	if err != nil {
+		return false
+	}
+	
+	// Check if using uv environment
+	if isUvAvailable() && hasUvProject(cfg.CNGTPath) {
+		return arePackagesInstalledInUv(cfg.CNGTPath)
+	}
+	
+	// Fallback to system Python check
 	for _, pkg := range requiredPackages {
 		if !isPackageInstalled(pkg) {
 			return false
 		}
 	}
 	return true
+}
+
+func arePackagesInstalledInUv(projectPath string) bool {
+	for _, pkg := range requiredPackages {
+		pkgName := strings.Split(pkg, ">=")[0]
+		pkgName = strings.Split(pkgName, "==")[0]
+		
+		cmd := exec.Command("uv", "run", "python", "-c", fmt.Sprintf("import %s", pkgName))
+		cmd.Dir = projectPath
+		if cmd.Run() != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func hasUvProject(path string) bool {
+	_, err := os.Stat(filepath.Join(path, "pyproject.toml"))
+	return err == nil
 }
 
 func Install() error {
@@ -39,11 +70,17 @@ func Install() error {
 
 	fmt.Println("Installing Python dependencies...")
 	
-	if isUvAvailable() {
-		return installWithUv(cfg)
-	} else {
-		return installWithPip(cfg)
+	// Try to install uv if not available
+	if !isUvAvailable() {
+		fmt.Println("   Installing uv (modern Python package manager)...")
+		if err := installUv(); err != nil {
+			fmt.Printf("   Failed to install uv, falling back to pip: %v\n", err)
+			return installWithPip(cfg)
+		}
+		fmt.Println("   ✓ uv installed successfully")
 	}
+	
+	return installWithUv(cfg)
 }
 
 func isPythonInstalled() bool {
@@ -64,16 +101,82 @@ func isUvAvailable() bool {
 	return cmd.Run() == nil
 }
 
-func installWithUv(cfg *config.Config) error {
-	reqFile := filepath.Join(cfg.CNGTPath, "requirements.txt")
-	if _, err := os.Stat(reqFile); os.IsNotExist(err) {
-		return installPackagesDirectly("uv", "add")
+func installUv() error {
+	// Install uv using the official installer
+	var cmd *exec.Cmd
+	
+	// Different installation methods for different platforms
+	switch runtime.GOOS {
+	case "windows":
+		// Use PowerShell to install uv on Windows
+		cmd = exec.Command("powershell", "-Command", "irm https://astral.sh/uv/install.ps1 | iex")
+	default:
+		// Use curl for Unix-like systems
+		cmd = exec.Command("sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh")
 	}
-
-	cmd := exec.Command("uv", "pip", "install", "-r", reqFile)
+	
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func installWithUv(cfg *config.Config) error {
+	// Initialize uv project in the CNGT directory
+	fmt.Println("   Setting up Python environment...")
+	
+	// Store current directory to restore later
+	originalDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+	defer os.Chdir(originalDir)
+	
+	// Change to CNGT directory
+	if err := os.Chdir(cfg.CNGTPath); err != nil {
+		return fmt.Errorf("failed to change to CNGT directory: %w", err)
+	}
+	
+	// Initialize uv project if not already initialized
+	pyprojectFile := filepath.Join(cfg.CNGTPath, "pyproject.toml")
+	if _, err := os.Stat(pyprojectFile); os.IsNotExist(err) {
+		cmd := exec.Command("uv", "init", "--no-readme")
+		cmd.Dir = cfg.CNGTPath
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to initialize uv project: %w", err)
+		}
+	}
+	
+	// Install packages using uv
+	reqFile := filepath.Join(cfg.CNGTPath, "requirements.txt")
+	if _, err := os.Stat(reqFile); os.IsNotExist(err) {
+		// Install packages individually if no requirements.txt
+		for _, pkg := range requiredPackages {
+			fmt.Printf("   Installing %s...\n", pkg)
+			cmd := exec.Command("uv", "add", pkg)
+			cmd.Dir = cfg.CNGTPath
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("failed to install %s: %w", pkg, err)
+			}
+		}
+	} else {
+		// Install from requirements.txt
+		fmt.Println("   Installing from requirements.txt...")
+		
+		// First, add the requirements to the project
+		cmd := exec.Command("uv", "add", "-r", reqFile)
+		cmd.Dir = cfg.CNGTPath
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to add requirements from requirements.txt: %w", err)
+		}
+	}
+	
+	return nil
 }
 
 func installWithPip(cfg *config.Config) error {
