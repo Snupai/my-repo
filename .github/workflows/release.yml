@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Get version
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+    
+    - name: Build binaries
+      run: |
+        chmod +x scripts/build.sh
+        ./scripts/build.sh ${{ steps.version.outputs.VERSION }}
+    
+    - name: Create checksums
+      run: |
+        cd dist
+        sha256sum * > checksums.txt
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get commits since last tag
+        LAST_TAG=$(git tag --sort=-version:refname | head -n 2 | tail -n 1)
+        if [ -z "$LAST_TAG" ]; then
+          CHANGELOG="Initial release"
+        else
+          CHANGELOG=$(git log --oneline ${LAST_TAG}..HEAD --pretty=format:"- %s" | head -20)
+        fi
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ steps.version.outputs.VERSION }}
+        body: |
+          ## What's Changed
+          ${{ steps.changelog.outputs.CHANGELOG }}
+          
+          ## Installation
+          
+          Download the appropriate binary for your platform:
+          - **Linux**: `cngt-cli-linux-amd64`
+          - **macOS**: `cngt-cli-darwin-amd64` or `cngt-cli-darwin-arm64`
+          - **Windows**: `cngt-cli-windows-amd64.exe`
+          
+          ## Quick Install
+          ```bash
+          # Linux/macOS
+          curl -sSL https://github.com/snupai/cngt-cli/releases/download/v${{ steps.version.outputs.VERSION }}/cngt-cli-linux-amd64 -o cngt-cli
+          chmod +x cngt-cli
+          sudo mv cngt-cli /usr/local/bin/
+          ```
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Assets
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/cngt-cli-windows-amd64.exe
+        asset_name: cngt-cli-windows-amd64.exe
+        asset_content_type: application/octet-stream
+    
+    - name: Upload Linux AMD64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/cngt-cli-linux-amd64
+        asset_name: cngt-cli-linux-amd64
+        asset_content_type: application/octet-stream
+    
+    - name: Upload Linux ARM64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/cngt-cli-linux-arm64
+        asset_name: cngt-cli-linux-arm64
+        asset_content_type: application/octet-stream
+    
+    - name: Upload macOS AMD64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/cngt-cli-darwin-amd64
+        asset_name: cngt-cli-darwin-amd64
+        asset_content_type: application/octet-stream
+    
+    - name: Upload macOS ARM64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/cngt-cli-darwin-arm64
+        asset_name: cngt-cli-darwin-arm64
+        asset_content_type: application/octet-stream
+    
+    - name: Upload Checksums
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/checksums.txt
+        asset_name: checksums.txt
+        asset_content_type: text/plain
