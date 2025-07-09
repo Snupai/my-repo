@@ -112,6 +112,103 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 This tool is a wrapper around the custom-nothing-glyph-tools repository. It is not affiliated with Nothing Technology Limited. The underlying tools are provided as-is without warranty.
 
+## Releasing New Versions
+
+### For Maintainers
+
+This project uses automated GitHub Actions for releasing new versions. There are multiple ways to trigger a new release:
+
+#### Method 1: Using the Release Script (Recommended)
+
+```bash
+# Create and push a new release tag
+make release VERSION=1.0.1
+```
+
+This will:
+1. Validate the version format (semantic versioning)
+2. Update the version in source code
+3. Create a git commit and tag
+4. Push to GitHub, triggering the automated release
+
+#### Method 2: Manual Git Tagging
+
+```bash
+# Update version in source code
+sed -i 's/Version   = ".*"/Version   = "1.0.1"/' internal/version/version.go
+
+# Commit the version change
+git add internal/version/version.go
+git commit -m "chore: bump version to 1.0.1"
+
+# Create and push tag
+git tag -a v1.0.1 -m "Release version 1.0.1"
+git push origin main
+git push origin v1.0.1
+```
+
+#### Method 3: GitHub Actions Manual Trigger
+
+1. Go to the [Actions tab](https://github.com/snupai/cngt-cli/actions)
+2. Select the "Release" workflow
+3. Click "Run workflow"
+4. Enter the version number (e.g., `1.0.1`)
+5. Click "Run workflow"
+
+### What Happens During Release
+
+The automated release process:
+
+1. **Builds binaries** for all supported platforms:
+   - Windows AMD64
+   - Linux AMD64/ARM64
+   - macOS AMD64/ARM64
+
+2. **Generates changelog** from git commits since the last release
+
+3. **Creates GitHub release** with:
+   - Release notes and changelog
+   - Installation instructions
+   - All platform binaries
+   - Checksums for verification
+
+4. **Updates self-update mechanism** so users can upgrade automatically
+
+### Release Requirements
+
+- Version must follow semantic versioning (e.g., `1.0.1`, `2.1.0`)
+- Must be on `main` branch with clean working directory
+- All tests must pass
+- GitHub repository must have appropriate permissions
+
+### Testing a Release
+
+After creating a release:
+
+```bash
+# Test the release binaries
+curl -sSL https://github.com/snupai/cngt-cli/releases/latest/download/cngt-cli-linux-amd64 -o cngt-cli-test
+chmod +x cngt-cli-test
+./cngt-cli-test --version
+./cngt-cli-test --help
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Workflow
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `go test -v ./...`
+5. Build and test: `make dev`
+6. Submit a Pull Request
+
+### Code Style
+
+- Follow Go conventions
+- Run `go fmt` before committing
+- Add tests for new functionality
+- Update documentation as needed

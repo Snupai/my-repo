@@ -1,0 +1,53 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Download dependencies
+      run: go mod download
+    
+    - name: Run tests
+      run: go test -v ./...
+    
+    - name: Run go vet
+      run: go vet ./...
+    
+    - name: Check formatting
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "The following files need to be formatted:"
+          gofmt -s -l .
+          exit 1
+        fi
+    
+    - name: Test build
+      run: go build -v ./cmd/main.go
+    
+    - name: Test cross-platform build
+      run: |
+        chmod +x scripts/build.sh
+        ./scripts/build.sh 0.0.0-pr
+    
+    - name: Validate version consistency
+      run: |
+        # Check that version in version.go matches expected format
+        version=$(grep 'Version.*=' internal/version/version.go | sed 's/.*"\(.*\)".*/\1/')
+        if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Version format is invalid: $version"
+          exit 1
+        fi
+        echo "Version format is valid: $version"

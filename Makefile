@@ -38,6 +38,9 @@ lint: ## Run linter
 deps: ## Download dependencies
 	@go mod download
 
+pre-release: ## Run pre-release validation checks
+	@./scripts/pre-release-check.sh
+
 release: ## Create a new release (usage: make release VERSION=1.0.1)
 	@if [ -z "$(VERSION)" ]; then echo "Error: VERSION is required. Usage: make release VERSION=1.0.1"; exit 1; fi
 	@./scripts/tag-release.sh $(VERSION)

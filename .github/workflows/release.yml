@@ -5,13 +5,24 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for changelog generation
     
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -21,7 +32,11 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION=${GITHUB_REF#refs/tags/v}
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/v}
+        fi
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
     
@@ -49,14 +64,31 @@ jobs:
         echo "$CHANGELOG" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
     
+    - name: Create or update tag
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Update version in source code
+        sed -i 's/Version   = ".*"/Version   = "${{ steps.version.outputs.VERSION }}"/' internal/version/version.go
+        
+        # Commit and tag if there are changes
+        if [ -n "$(git status --porcelain)" ]; then
+          git add internal/version/version.go
+          git commit -m "chore: bump version to ${{ steps.version.outputs.VERSION }}"
+          git push origin main
+        fi
+        
+        # Create tag
+        git tag -a "v${{ steps.version.outputs.VERSION }}" -m "Release version ${{ steps.version.outputs.VERSION }}"
+        git push origin "v${{ steps.version.outputs.VERSION }}"
+    
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ steps.version.outputs.VERSION }}
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        name: Release ${{ steps.version.outputs.VERSION }}
         body: |
           ## What's Changed
           ${{ steps.changelog.outputs.CHANGELOG }}
@@ -64,76 +96,39 @@ jobs:
           ## Installation
           
           Download the appropriate binary for your platform:
-          - **Linux**: `cngt-cli-linux-amd64`
-          - **macOS**: `cngt-cli-darwin-amd64` or `cngt-cli-darwin-arm64`
+          - **Linux AMD64**: `cngt-cli-linux-amd64`
+          - **Linux ARM64**: `cngt-cli-linux-arm64`
+          - **macOS AMD64**: `cngt-cli-darwin-amd64`
+          - **macOS ARM64**: `cngt-cli-darwin-arm64`
           - **Windows**: `cngt-cli-windows-amd64.exe`
           
           ## Quick Install
+          
+          ### Linux/macOS
           ```bash
-          # Linux/macOS
+          # Download and install (replace with your platform)
           curl -sSL https://github.com/snupai/cngt-cli/releases/download/v${{ steps.version.outputs.VERSION }}/cngt-cli-linux-amd64 -o cngt-cli
           chmod +x cngt-cli
           sudo mv cngt-cli /usr/local/bin/
           ```
+          
+          ### Windows
+          ```powershell
+          # Download and place in PATH
+          Invoke-WebRequest -Uri "https://github.com/snupai/cngt-cli/releases/download/v${{ steps.version.outputs.VERSION }}/cngt-cli-windows-amd64.exe" -OutFile "cngt-cli.exe"
+          ```
+          
+          ## Verify Installation
+          ```bash
+          cngt-cli --version
+          cngt-cli --help
+          ```
+        files: |
+          dist/cngt-cli-windows-amd64.exe
+          dist/cngt-cli-linux-amd64
+          dist/cngt-cli-linux-arm64
+          dist/cngt-cli-darwin-amd64
+          dist/cngt-cli-darwin-arm64
+          dist/checksums.txt
         draft: false
         prerelease: false
-    
-    - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/cngt-cli-windows-amd64.exe
-        asset_name: cngt-cli-windows-amd64.exe
-        asset_content_type: application/octet-stream
-    
-    - name: Upload Linux AMD64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/cngt-cli-linux-amd64
-        asset_name: cngt-cli-linux-amd64
-        asset_content_type: application/octet-stream
-    
-    - name: Upload Linux ARM64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/cngt-cli-linux-arm64
-        asset_name: cngt-cli-linux-arm64
-        asset_content_type: application/octet-stream
-    
-    - name: Upload macOS AMD64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/cngt-cli-darwin-amd64
-        asset_name: cngt-cli-darwin-amd64
-        asset_content_type: application/octet-stream
-    
-    - name: Upload macOS ARM64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/cngt-cli-darwin-arm64
-        asset_name: cngt-cli-darwin-arm64
-        asset_content_type: application/octet-stream
-    
-    - name: Upload Checksums
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/checksums.txt
-        asset_name: checksums.txt
-        asset_content_type: text/plain
