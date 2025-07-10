@@ -34,9 +34,11 @@ Invoke-WebRequest -Uri "https://github.com/snupai/cngt-cli/releases/latest/downl
 ### First Run
 
 The first time you run any CNGT command, the tool will automatically:
-1. Download the CNGT repository
+1. Download the CNGT repository  
 2. Check for Python installation
 3. Install required Python dependencies
+
+Additionally, the tool will check for updates weekly and notify you when new versions are available.
 
 ```bash
 cngt-cli migrate --help

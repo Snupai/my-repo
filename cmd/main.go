@@ -20,6 +20,10 @@ var rootCmd = &cobra.Command{
 	Long: `A cross-platform CLI tool that wraps the custom-nothing-glyph-tools repository,
 providing easy installation, dependency management, and usage from any directory.`,
 	Version: version.GetVersion(),
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Check for updates on any command run
+		checkForUpdatesAsync()
+	},
 }
 
 var migrateCmd = &cobra.Command{
@@ -27,7 +31,7 @@ var migrateCmd = &cobra.Command{
 	Short: "Run GlyphMigrate.py with the given arguments",
 	Long:  "Execute the GlyphMigrate.py script from the CNGT repository",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := ensureSetup(); err != nil {
+		if err := performSetupIfNeeded(); err != nil {
 			fmt.Fprintf(os.Stderr, "Setup error: %v\n", err)
 			os.Exit(1)
 		}
@@ -44,7 +48,7 @@ var modderCmd = &cobra.Command{
 	Short: "Run GlyphModder.py with the given arguments",
 	Long:  "Execute the GlyphModder.py script from the CNGT repository",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := ensureSetup(); err != nil {
+		if err := performSetupIfNeeded(); err != nil {
 			fmt.Fprintf(os.Stderr, "Setup error: %v\n", err)
 			os.Exit(1)
 		}
@@ -61,7 +65,7 @@ var translatorCmd = &cobra.Command{
 	Short: "Run GlyphTranslator.py with the given arguments",
 	Long:  "Execute the GlyphTranslator.py script from the CNGT repository",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := ensureSetup(); err != nil {
+		if err := performSetupIfNeeded(); err != nil {
 			fmt.Fprintf(os.Stderr, "Setup error: %v\n", err)
 			os.Exit(1)
 		}
@@ -78,7 +82,7 @@ var updateCmd = &cobra.Command{
 	Short: "Update the CNGT repository to the latest version",
 	Long:  "Pull the latest changes from the custom-nothing-glyph-tools repository",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := ensureSetup(); err != nil {
+		if err := performSetupIfNeeded(); err != nil {
 			fmt.Fprintf(os.Stderr, "Setup error: %v\n", err)
 			os.Exit(1)
 		}
@@ -136,7 +140,8 @@ var setupCmd = &cobra.Command{
 	},
 }
 
-func ensureSetup() error {
+
+func checkForUpdatesAsync() {
 	// Check for updates on first setup (weekly)
 	go func() {
 		if shouldCheckForUpdates() {
@@ -145,7 +150,9 @@ func ensureSetup() error {
 			}
 		}
 	}()
+}
 
+func performSetupIfNeeded() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
