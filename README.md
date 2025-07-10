@@ -14,14 +14,44 @@ A cross-platform CLI tool that wraps the [custom-nothing-glyph-tools](https://gi
 
 ### Quick Install (Recommended)
 
+#### Linux/macOS
 ```bash
-# Linux/macOS
 curl -sSL https://github.com/snupai/cngt-cli/releases/latest/download/cngt-cli-linux-amd64 -o cngt-cli
 chmod +x cngt-cli
 sudo mv cngt-cli /usr/local/bin/
+```
 
-# Windows (PowerShell)
-Invoke-WebRequest -Uri "https://github.com/snupai/cngt-cli/releases/latest/download/cngt-cli-windows-amd64.exe" -OutFile "cngt-cli.exe"
+#### Windows (PowerShell as Administrator)
+```powershell
+# Create a directory for cngt-cli in Program Files
+New-Item -ItemType Directory -Force -Path "C:\Program Files\cngt-cli"
+
+# Download the executable
+Invoke-WebRequest -Uri "https://github.com/snupai/cngt-cli/releases/latest/download/cngt-cli-windows-amd64.exe" -OutFile "C:\Program Files\cngt-cli\cngt-cli.exe"
+
+# Add to PATH (requires restart of PowerShell/Command Prompt)
+$env:PATH += ";C:\Program Files\cngt-cli"
+[Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";C:\Program Files\cngt-cli", [EnvironmentVariableTarget]::Machine)
+
+# Verify installation
+cngt-cli --version
+```
+
+#### Windows (Alternative - User Directory)
+If you don't have administrator access:
+```powershell
+# Create a directory in your user profile
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\bin"
+
+# Download the executable
+Invoke-WebRequest -Uri "https://github.com/snupai/cngt-cli/releases/latest/download/cngt-cli-windows-amd64.exe" -OutFile "$env:USERPROFILE\bin\cngt-cli.exe"
+
+# Add to user PATH
+$userPath = [Environment]::GetEnvironmentVariable("PATH", [EnvironmentVariableTarget]::User)
+[Environment]::SetEnvironmentVariable("PATH", "$userPath;$env:USERPROFILE\bin", [EnvironmentVariableTarget]::User)
+
+# Restart PowerShell and verify
+cngt-cli --version
 ```
 
 ### Manual Installation
